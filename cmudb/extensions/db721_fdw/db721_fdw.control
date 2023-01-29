@@ -1,0 +1,5 @@
+# db721_fdw extension
+comment = 'db721 Foreign Data Wrapper for PostgreSQL'
+default_version = '0.0.1'
+module_pathname = '$libdir/db721_fdw'
+relocatable = true

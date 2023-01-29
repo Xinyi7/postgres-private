@@ -42,3 +42,7 @@ lib*.pc
 /Debug/
 /Release/
 /tmp_install/
+
+# CMU-DB
+.idea
+build/
