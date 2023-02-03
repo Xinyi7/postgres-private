@@ -199,17 +199,15 @@ class Db721BlockStatistics:
 
 
 class Db721Serializer:
-    def __init__(self, table_name: str, outfile, block_size_bytes: int = 1024 * 1024):
-        self.json_schema = {"Table": table_name, "Columns": {}}
+    def __init__(self, table_name: str, outfile, max_values_per_block: int = 50000):
+        self.json_schema = {"Table": table_name, "Columns": {}, "Max Values Per Block": max_values_per_block}
         self.outfile = outfile
-        self.block_size_bytes = block_size_bytes
-        self._current_block_size_bytes = 0
+        self.max_values_per_block = max_values_per_block
+        self._num_values = 0
         self._current_block_offset = 0
 
     def _new_block(self):
-        pad = self.block_size_bytes - self._current_block_size_bytes
-        self.outfile.write(("\0" * pad).encode("ASCII"))
-        self._current_block_size_bytes = 0
+        self._num_values = 0
         self._current_block_offset += 1
 
     def _serialize(self, col_type: str, col_val):
@@ -224,22 +222,21 @@ class Db721Serializer:
         else:
             raise RuntimeError(f"Bad type: {col_type}, for {col_val}")
 
-        if self._current_block_size_bytes + len(bytes_val) > self.block_size_bytes:
+        if self._num_values >= self.max_values_per_block:
             return False
         self.outfile.write(bytes_val)
-        self._current_block_size_bytes += len(bytes_val)
+        self._num_values += 1
         return True
 
     def write_col(self, col_name: str, col_type: str, col_contents):
         assert col_name not in self.json_schema, "Duplicate column?"
-        self._current_block_size_bytes = 0
+        self._num_values = 0
         self._current_block_offset = 0
 
         self.json_schema["Columns"][col_name] = {
             "type": col_type,
             "block_stats": {},
             "num_blocks": 0,
-            "block_size": self.block_size_bytes,
             "start_offset": self.outfile.tell(),
         }
 
