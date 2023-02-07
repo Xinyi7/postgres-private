@@ -26,4 +26,4 @@ override PG_CXXFLAGS += -Wno-register 	# PostgreSQL uses the register storage cl
 # override PG_CXXFLAGS += -O3
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
-include $(PGXS)
+include $(PGXS) ./

@@ -15,7 +15,7 @@
 #include "../../../../src/include/fmgr.h"
 #include "../../../../src/include/foreign/fdwapi.h"
 // clang-format on
-
+PG_MODULE_MAGIC;
 Datum db721_fdw_handler(PG_FUNCTION_ARGS);
 
 // clang-format off
