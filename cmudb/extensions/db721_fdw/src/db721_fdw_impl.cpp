@@ -49,6 +49,7 @@ extern "C" void db721_BeginForeignScan(ForeignScanState *node, int eflags) {
   // TODO(721): Write me!
     List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
     char	   *filename;
+    ListCell   *cell;
     auto file_state = (Db721_file*)palloc(sizeof(Db721_file));
     foreach(cell, options_list)
     {
@@ -65,21 +66,22 @@ extern "C" void db721_BeginForeignScan(ForeignScanState *node, int eflags) {
 
     int size;
 
-    read(file_state->f_oid, static_cast<char *>(&size), 4);
+    read(file_state->f_oid, &size, 4);
 
 
     lseek(file_state->f_oid, -size, SEEK_END);
 
-    auto json_buf = palloc(sizeof(json));
-    read(file_state->f_oid, file_state->metadata, size);
 
-    auto metadata_json = json::parse(file_state->metadata);
+    char json_buf[size];
+    read(file_state->f_oid, json_buf, size);
+
+    auto metadata_json = json::parse(json_buf);
     file_state->meta_ptr = std::make_shared<json>(metadata_json);
     int max_per_block =int(metadata_json["Max Values Per Block"]);
     int tuple_size = 0;
     int idx = 0;
     file_state->num_columns = metadata_json.size();
-    file_state->column_sizes = palloc(sizeof(int) * file_state->num_columns);
+    file_state->column_sizes = (int *)palloc(sizeof(int) * file_state->num_columns);
     for (auto& el : metadata_json["Columns"].items()) {
         switch(el.value()["type"]){
             case "str":
@@ -99,7 +101,7 @@ extern "C" void db721_BeginForeignScan(ForeignScanState *node, int eflags) {
         }
 
     }
-    file_state->buf = palloc(tuple_size * max_per_block);
+    file_state->buf = (char *)palloc(tuple_size * max_per_block);
     node->fdw_state = file_state;
 
 }
