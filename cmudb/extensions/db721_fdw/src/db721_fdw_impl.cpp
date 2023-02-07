@@ -12,6 +12,7 @@ extern "C" {
 // clang-format on
 using json = nlohmann::json;
 class Db721_file{
+public:
     char * filename;
     int f_oid;
     char * buf;
