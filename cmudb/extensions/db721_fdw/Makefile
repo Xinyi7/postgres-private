@@ -11,6 +11,7 @@ MODULE_big = db721_fdw
 DATA = db721_fdw--0.0.1.sql
 OBJS = src/dog.o src/db721_fdw_impl.o src/db721_fdw.o
 SHLIB_LINK = -lstdc++
+
 # If PG_CONFIG is not set, try the default NoisePage build folder first, then try PATH.
 PG_CONFIG ?= ../../../build/postgres/bin/pg_config
 PG_CONFIG ?= pg_config
