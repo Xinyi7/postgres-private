@@ -50,9 +50,6 @@ extern "C" void db721_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel,
                                       Oid foreigntableid) {
   // TODO(721): Write me!
 
-
-    Dog terrier("Terrier");
-    elog(LOG, "db721_GetForeignRelSize: %s", terrier.Bark().c_str());
 }
 
 extern "C" void db721_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel,
@@ -76,13 +73,11 @@ extern "C" ForeignScan *
 db721_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid,
                    ForeignPath *best_path, List *tlist, List *scan_clauses,
                    Plan *outer_plan) {
+
     List *targetColumnList = baserel->reltarget->exprs;
     List *restrictInfoList = baserel->baserestrictinfo;
 
     List *columnList = getColumns(targetColumnList , restrictInfoList, baserel);
-
-    elog(LOG, "column list, columlist size:%d", list_length(columnList));
-
 
     elog(LOG, "get plan columlist size:%d", list_length(columnList));
     auto foreignColumnList = list_make3(columnList, restrictInfoList, baserel);
@@ -183,9 +178,8 @@ extern "C" void db721_BeginForeignScan(ForeignScanState *node, int eflags) {
 
     size_t read_size = read(file_state->f_oid, (char *) &size, 4);
 
-    if (read_size < 0) {
+    if (read_size ==  0) {
         elog(ERROR, "json metadata size read invalid");
-        return;
     }
     lseek(file_state->f_oid, -4 - size, SEEK_END);
     elog(LOG, "db721_BeginForeignScan: %d", size);
@@ -193,9 +187,8 @@ extern "C" void db721_BeginForeignScan(ForeignScanState *node, int eflags) {
     char json_buf[size + 1] = "";
     json_buf[size] = '\0';
     read_size = read(file_state->f_oid, json_buf, size);
-    if (read_size < 0) {
+    if (read_size == 0) {
         elog(ERROR, "json metadata read invalid");
-        return;
     }
     elog(LOG, "db721_BeginForeignScan read size: %lu, json body: %s", read_size, json_buf);
 
@@ -285,111 +278,135 @@ extern "C" void db721_BeginForeignScan(ForeignScanState *node, int eflags) {
                 char * op_name = get_opname(ope_expr->opno);
                 if (strcmp(op_name, "=")== 0){
                     switch (constant_1->consttype){
-                        case INT4OID:
-                            if (DatumGetInt32(constant_1->constvalue) != DatumGetInt32(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        case INT4OID: {
+                            if (DatumGetInt32(constant_1->constvalue) != DatumGetInt32(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case FLOAT4OID:
-                            if (DatumGetFloat4(constant_1->constvalue) != DatumGetFloat4(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        }
+                        case FLOAT4OID: {
+                            if (DatumGetFloat4(constant_1->constvalue) != DatumGetFloat4(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case TEXTOID:
-                            if (strcmp(DatumGetCString(constant_1->constvalue),DatumGetCString(constant_2->constvalue))!= 0){
-                                file_state->return_null=true;
+                        }
+                        case TEXTOID: {
+                            if (strcmp(DatumGetCString(constant_1->constvalue),
+                                       DatumGetCString(constant_2->constvalue)) != 0) {
+                                file_state->return_null = true;
                             }
                             break;
+                        }
                     }
                 }else if (strcmp(op_name, "<>")== 0){
                     switch (constant_1->consttype){
-                        case INT4OID:
-                            if (DatumGetInt32(constant_1->constvalue) == DatumGetInt32(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        case INT4OID: {
+                            if (DatumGetInt32(constant_1->constvalue) == DatumGetInt32(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case FLOAT4OID:
-                            if (DatumGetFloat4(constant_1->constvalue) == DatumGetFloat4(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        }
+                        case FLOAT4OID: {
+                            if (DatumGetFloat4(constant_1->constvalue) == DatumGetFloat4(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case TEXTOID:
-                            if (strcmp(DatumGetCString(constant_1->constvalue),DatumGetCString(constant_2->constvalue))== 0){
-                                file_state->return_null=true;
+                        }
+                        case TEXTOID: {
+                            if (strcmp(DatumGetCString(constant_1->constvalue),
+                                       DatumGetCString(constant_2->constvalue)) == 0) {
+                                file_state->return_null = true;
                             }
                             break;
+                        }
                     }
                 }else if (strcmp(op_name, ">=")== 0){
                     switch (constant_1->consttype){
-                        case INT4OID:
-                            if (DatumGetInt32(constant_1->constvalue) < DatumGetInt32(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        case INT4OID: {
+                            if (DatumGetInt32(constant_1->constvalue) < DatumGetInt32(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case FLOAT4OID:
-                            if (DatumGetFloat4(constant_1->constvalue) < DatumGetFloat4(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        }
+                        case FLOAT4OID: {
+                            if (DatumGetFloat4(constant_1->constvalue) < DatumGetFloat4(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case TEXTOID:
-                            if (strcmp(DatumGetCString(constant_1->constvalue),DatumGetCString(constant_2->constvalue)) < 0){
-                                file_state->return_null=true;
+                        }
+                        case TEXTOID: {
+                            if (strcmp(DatumGetCString(constant_1->constvalue),
+                                       DatumGetCString(constant_2->constvalue)) < 0) {
+                                file_state->return_null = true;
                             }
                             break;
+                        }
                     }
                 }else if (strcmp(op_name, "<")== 0){
                     switch (constant_1->consttype){
-                        case INT4OID:
-                            if (DatumGetInt32(constant_1->constvalue) >= DatumGetInt32(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        case INT4OID: {
+                            if (DatumGetInt32(constant_1->constvalue) >= DatumGetInt32(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case FLOAT4OID:
-                            if (DatumGetFloat4(constant_1->constvalue) >= DatumGetFloat4(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        }
+                        case FLOAT4OID: {
+                            if (DatumGetFloat4(constant_1->constvalue) >= DatumGetFloat4(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case TEXTOID:
-                            if (strcmp(DatumGetCString(constant_1->constvalue),DatumGetCString(constant_2->constvalue)) >= 0){
-                                file_state->return_null=true;
+                        }
+                        case TEXTOID: {
+                            if (strcmp(DatumGetCString(constant_1->constvalue),
+                                       DatumGetCString(constant_2->constvalue)) >= 0) {
+                                file_state->return_null = true;
                             }
                             break;
+                        }
                     }
                 }else if (strcmp(op_name, ">")== 0){
                     switch (constant_1->consttype){
-                        case INT4OID:
-                            if (DatumGetInt32(constant_1->constvalue) <= DatumGetInt32(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        case INT4OID: {
+                            if (DatumGetInt32(constant_1->constvalue) <= DatumGetInt32(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case FLOAT4OID:
-                            if (DatumGetFloat4(constant_1->constvalue) <= DatumGetFloat4(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        }
+                        case FLOAT4OID: {
+                            if (DatumGetFloat4(constant_1->constvalue) <= DatumGetFloat4(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case TEXTOID:
-                            if (strcmp(DatumGetCString(constant_1->constvalue),DatumGetCString(constant_2->constvalue)) <= 0){
-                                file_state->return_null=true;
+                        }
+                        case TEXTOID: {
+                            if (strcmp(DatumGetCString(constant_1->constvalue),
+                                       DatumGetCString(constant_2->constvalue)) <= 0) {
+                                file_state->return_null = true;
                             }
                             break;
+                        }
                     }
                 }else if (strcmp(op_name, "<=")== 0){
                     switch (constant_1->consttype){
-                        case INT4OID:
-                            if (DatumGetInt32(constant_1->constvalue) > DatumGetInt32(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        case INT4OID: {
+                            if (DatumGetInt32(constant_1->constvalue) > DatumGetInt32(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case FLOAT4OID:
-                            if (DatumGetFloat4(constant_1->constvalue) > DatumGetFloat4(constant_2->constvalue)){
-                                file_state->return_null=true;
+                        }
+                        case FLOAT4OID: {
+                            if (DatumGetFloat4(constant_1->constvalue) > DatumGetFloat4(constant_2->constvalue)) {
+                                file_state->return_null = true;
                             }
                             break;
-                        case TEXTOID:
-                            if (strcmp(DatumGetCString(constant_1->constvalue),DatumGetCString(constant_2->constvalue)) > 0){
-                                file_state->return_null=true;
+                        }
+                        case TEXTOID: {
+                            if (strcmp(DatumGetCString(constant_1->constvalue),
+                                       DatumGetCString(constant_2->constvalue)) > 0) {
+                                file_state->return_null = true;
                             }
                             break;
+                        }
                     }
                 }
                 restrictInfoList = list_delete_cell(restrictInfoList, restrictInfoCell);
@@ -429,13 +446,14 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
     elog(LOG, "db721_IterateForeignScan tuple idx: %d, remain tuple:%d, block idx: %d, num_block:%d, max_per_block:%d",file_state->tuple_idx,
          file_state->remain_tuple, file_state->block_idx, file_state->num_block, max_per_block);
 
-
+    bool tuple_null = false;
     while (!file_state->return_null && (file_state->block_idx  != file_state->num_block) && (file_state->tuple_idx == max_per_block)){
         file_state->tuple_idx = 0;
         ListCell *columnCell = NULL;
         int buf_idx = 0;
 
-        bool tuple_null = false;
+        tuple_null = false;
+        elog(LOG, "db721_IterateForeignScan 432, tuple index: %d", file_state->block_idx);
         foreach(columnCell, file_state->column_list)
         {
             Var *column = (Var *) lfirst(columnCell);
@@ -449,12 +467,13 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
                 ListCell * restrictInfoCell= NULL;
                 foreach(restrictInfoCell, restrictInfoList)
                 {
-
+                    elog(LOG, "db721_IterateForeignScan 446");
                     RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictInfoCell);
 
                     OpExpr *ope_expr = (OpExpr *) restrictInfo->clause;
                     Const *constant_2 = (Const *) lsecond(ope_expr->args);
                     char *op_name = get_opname(ope_expr->opno);
+                    elog(LOG, "db721_IterateForeignScan 452");
                     if (strcmp(op_name, "=")== 0) {
                         switch (file_state->column_type_list[file_state->column_idx_list_map[i]]) {
                             case 0: {
@@ -652,19 +671,15 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
                         }
                     }
 
-                    if (tuple_null){
-                        break;
-                    }
-
                 }
 
             }
-            if (tuple_null){
-                break;
-            }
+
         }
+        elog(LOG, "db721_IterateForeignScan 679,tuple null %s", tuple_null? "true":"false");
         if (tuple_null){
             file_state->block_idx++;
+            file_state->tuple_idx = max_per_block;
             continue;
         }
 
@@ -685,13 +700,16 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
           int read_size = type_size * file_state->metadata["Columns"][column_name]["block_stats"][block_index_str]["num"].get<int>();
 
           lseek(file_state->f_oid,  start_index + type_size * max_per_block * file_state->block_idx , SEEK_SET);
-          read(file_state->f_oid, &(file_state->buf[buf_idx]), read_size);
+          size_t tmp_read_size = read(file_state->f_oid, &(file_state->buf[buf_idx]), read_size);
+          if (tmp_read_size == 0){
+              elog(ERROR, "read went wrong during iterate scanning");
+          }
           file_state->column_idx_list[file_state->column_idx_list_map[column_id-1]] = buf_idx;
           buf_idx += read_size;
         }
         file_state->block_idx++;
+        elog(LOG, "db721_IterateForeignScan 691， %s", tuple_null? "true":"false");
         break;
-
     }
 
     auto tupleSlot =  node->ss.ss_ScanTupleSlot;
@@ -706,7 +724,8 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
       return tupleSlot;
     }
     List * target_list= node->ss.ps.plan->targetlist;
-
+    elog(LOG, "db721_IterateForeignScan 725 tuple idx: %d, remain tuple:%d, block idx: %d, num_block:%d, max_per_block:%d",file_state->tuple_idx,
+         file_state->remain_tuple, file_state->block_idx, file_state->num_block, max_per_block);
     while ((file_state->block_idx != file_state->num_block) || (file_state->tuple_idx < file_state->remain_tuple)) {
       file_state->tuple_idx ++;
       ListCell * tmp_column_cell = NULL;
@@ -722,40 +741,40 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
 
           bool filtered = list_length(file_state->restrict_info_list[inplace_idx]) != 0;
           switch (file_state->column_type_list[file_state->column_idx_list_map[i]]) {
-              case 0:
+              case 0: {
                   if (file_state->buf[file_state->column_idx_list[file_state->column_idx_list_map[i]]] != '\0') {
                       char *string_value = &(file_state->buf[file_state->column_idx_list[i]]);
                       if (filtered) {
                           List *restrictInfoList = file_state->restrict_info_list[inplace_idx];
-                          ListCell * restrictInfoCell= NULL;
+                          ListCell *restrictInfoCell = NULL;
                           foreach(restrictInfoCell, restrictInfoList)
                           {
                               RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictInfoCell);
                               OpExpr *ope_expr = (OpExpr *) restrictInfo->clause;
                               Const *constant_2 = (Const *) lsecond(ope_expr->args);
                               char *op_name = get_opname(ope_expr->opno);
-                              if (strcmp(op_name, "=")== 0) {
+                              if (strcmp(op_name, "=") == 0) {
                                   if (strcmp(string_value, DatumGetCString(constant_2->constvalue)) != 0) {
                                       tuple_null = true;
                                   }
-                              } else if (strcmp(op_name, "<>")== 0) {
+                              } else if (strcmp(op_name, "<>") == 0) {
                                   if (strcmp(string_value, DatumGetCString(constant_2->constvalue)) == 0) {
                                       tuple_null = true;
                                   }
-                              } else if (strcmp(op_name, ">=")== 0) {
+                              } else if (strcmp(op_name, ">=") == 0) {
                                   if (strcmp(string_value, DatumGetCString(constant_2->constvalue)) < 0) {
                                       tuple_null = true;
                                   }
 
-                              } else if (strcmp(op_name, "<")== 0) {
+                              } else if (strcmp(op_name, "<") == 0) {
                                   if (strcmp(string_value, DatumGetCString(constant_2->constvalue)) >= 0) {
                                       tuple_null = true;
                                   }
-                              } else if (strcmp(op_name, ">")== 0) {
+                              } else if (strcmp(op_name, ">") == 0) {
                                   if (strcmp(string_value, DatumGetCString(constant_2->constvalue)) <= 0) {
                                       tuple_null = true;
                                   }
-                              } else if (strcmp(op_name, "<=")== 0) {
+                              } else if (strcmp(op_name, "<=") == 0) {
                                   if (strcmp(string_value, DatumGetCString(constant_2->constvalue)) > 0) {
                                       tuple_null = true;
                                   }
@@ -771,7 +790,8 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
                   }
                   file_state->column_idx_list[inplace_idx] += 32;
                   break;
-              case 1:
+              }
+              case 1: {
                   int int_value;
 
                   memcpy(&int_value, &file_state->buf[file_state->column_idx_list[file_state->column_idx_list_map[i]]],
@@ -780,7 +800,7 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
 
                   if (filtered) {
                       List *restrictInfoList = file_state->restrict_info_list[inplace_idx];
-                      ListCell * restrictInfoCell= NULL;
+                      ListCell *restrictInfoCell = NULL;
                       foreach(restrictInfoCell, restrictInfoList)
                       {
                           RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictInfoCell);
@@ -791,24 +811,24 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
                               if (int_value != DatumGetInt32(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, "<>")== 0) {
+                          } else if (strcmp(op_name, "<>") == 0) {
                               if (int_value == DatumGetInt32(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, ">=")== 0) {
+                          } else if (strcmp(op_name, ">=") == 0) {
                               if (int_value < DatumGetInt32(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
 
-                          } else if (strcmp(op_name, "<")== 0) {
+                          } else if (strcmp(op_name, "<") == 0) {
                               if (int_value >= DatumGetInt32(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, ">")== 0) {
+                          } else if (strcmp(op_name, ">") == 0) {
                               if (int_value <= DatumGetInt32(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, "<=")== 0) {
+                          } else if (strcmp(op_name, "<=") == 0) {
                               if (int_value > DatumGetInt32(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
@@ -822,7 +842,8 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
                   }
 
                   break;
-              case 2:
+              }
+              case 2: {
                   float float_value;
                   memcpy(&float_value,
                          &file_state->buf[file_state->column_idx_list[file_state->column_idx_list_map[i]]], 4);
@@ -831,35 +852,35 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
 
                   if (filtered) {
                       List *restrictInfoList = file_state->restrict_info_list[inplace_idx];
-                      ListCell * restrictInfoCell= NULL;
+                      ListCell *restrictInfoCell = NULL;
                       foreach(restrictInfoCell, restrictInfoList)
                       {
                           RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictInfoCell);
                           OpExpr *ope_expr = (OpExpr *) restrictInfo->clause;
                           Const *constant_2 = (Const *) lsecond(ope_expr->args);
                           char *op_name = get_opname(ope_expr->opno);
-                          if (strcmp(op_name, "=")== 0) {
+                          if (strcmp(op_name, "=") == 0) {
                               if (float_value != DatumGetFloat4(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, "<>")== 0) {
+                          } else if (strcmp(op_name, "<>") == 0) {
                               if (float_value == DatumGetFloat4(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, ">=")== 0) {
+                          } else if (strcmp(op_name, ">=") == 0) {
                               if (float_value < DatumGetFloat4(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
 
-                          } else if (strcmp(op_name, "<")== 0) {
+                          } else if (strcmp(op_name, "<") == 0) {
                               if (float_value >= DatumGetFloat4(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, ">")== 0) {
+                          } else if (strcmp(op_name, ">") == 0) {
                               if (float_value <= DatumGetFloat4(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
-                          } else if (strcmp(op_name, "<=")== 0) {
+                          } else if (strcmp(op_name, "<=") == 0) {
                               if (float_value > DatumGetFloat4(constant_2->constvalue)) {
                                   tuple_null = true;
                               }
@@ -872,6 +893,7 @@ extern "C" TupleTableSlot *db721_IterateForeignScan(ForeignScanState *node) {
                       columnNulls[i] = false;
                   }
                   break;
+              }
           }
       }
 
