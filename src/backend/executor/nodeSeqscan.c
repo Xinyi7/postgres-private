@@ -114,7 +114,11 @@ ExecSeqScan(PlanState *pstate)
 					(ExecScanRecheckMtd) SeqRecheck);
 }
 
-
+static TupleTableSlot *
+ExecSeqScan_placeholder(PlanState *pstate)
+{
+    return NULL;
+}
 /* ----------------------------------------------------------------
  *		ExecInitSeqScan
  * ----------------------------------------------------------------
@@ -122,6 +126,7 @@ ExecSeqScan(PlanState *pstate)
 SeqScanState *
 ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 {
+    elog(LOG, "exec init seq scan");
 	SeqScanState *scanstate;
 
 	/*
@@ -136,9 +141,10 @@ ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 	 */
 	scanstate = makeNode(SeqScanState);
 	scanstate->ss.ps.plan = (Plan *) node;
+
 	scanstate->ss.ps.state = estate;
 	scanstate->ss.ps.ExecProcNode = ExecSeqScan;
-
+    scanstate->ss.ps.second_ExecProcNode = ExecSeqScan_placeholder;
 	/*
 	 * Miscellaneous initialization
 	 *

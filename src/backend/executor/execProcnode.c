@@ -141,6 +141,7 @@ static bool ExecShutdownNode_walker(PlanState *node, void *context);
 PlanState *
 ExecInitNode(Plan *node, EState *estate, int eflags)
 {
+    elog(LOG, "exec init node");
 	PlanState  *result;
 	List	   *subps;
 	ListCell   *l;
@@ -209,6 +210,8 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 		case T_SeqScan:
 			result = (PlanState *) ExecInitSeqScan((SeqScan *) node,
 												   estate, eflags);
+            result->instrument = InstrAlloc(1, estate->es_instrument,
+                                            result->async_capable);
 			break;
 
 		case T_SampleScan:
@@ -389,7 +392,6 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 	}
 
 	ExecSetExecProcNode(result, result->ExecProcNode);
-
 	/*
 	 * Initialize any initPlans present in this node.  The planner put them in
 	 * a separate list for us.
@@ -456,6 +458,8 @@ ExecProcNodeFirst(PlanState *node)
 	 * does instrumentation.  Otherwise we can dispense with all wrappers and
 	 * have ExecProcNode() directly call the relevant function from now on.
 	 */
+    // instrument
+    elog(LOG, "instrument is null? %s", node->instrument == NULL? "true": "false");
 	if (node->instrument)
 		node->ExecProcNode = ExecProcNodeInstr;
 	else
@@ -473,12 +477,17 @@ ExecProcNodeFirst(PlanState *node)
 static TupleTableSlot *
 ExecProcNodeInstr(PlanState *node)
 {
+    static int count = 0;
 	TupleTableSlot *result;
 
 	InstrStartNode(node->instrument);
+    if (count == 20){
+        result = node->second_ExecProcNode(node);
+    }else {
+        result = node->ExecProcNodeReal(node);
+    }
 
-	result = node->ExecProcNodeReal(node);
-
+    count ++;
 	InstrStopNode(node->instrument, TupIsNull(result) ? 0.0 : 1.0);
 
 	return result;

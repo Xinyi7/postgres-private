@@ -813,7 +813,6 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	TupleDesc	tupType;
 	ListCell   *l;
 	int			i;
-
 	/*
 	 * Do permissions checks
 	 */
@@ -929,7 +928,6 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 
 		i++;
 	}
-
 	/*
 	 * Initialize the private state information for all the nodes in the query
 	 * tree.  This opens files, allocates storage and leaves us ready to start
