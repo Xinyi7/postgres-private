@@ -143,6 +143,7 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 {
     elog(LOG, "exec init node");
 	PlanState  *result;
+    PlanState * fake_node;
 	List	   *subps;
 	ListCell   *l;
 
@@ -210,6 +211,11 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 		case T_SeqScan:
 			result = (PlanState *) ExecInitSeqScan((SeqScan *) node,
 												   estate, eflags);
+
+//            fake_node= (PlanState *) ExecInitIndexScan((IndexScan *) node,
+//                                                       estate, eflags);
+//            ExecSetExecProcNode(fake_node, fake_node->ExecProcNode);
+//            result->second_ExecProcNode = fake_node;
             result->instrument = InstrAlloc(1, estate->es_instrument,
                                             result->async_capable);
 			break;
@@ -220,11 +226,19 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 			break;
 
 		case T_IndexScan:
+            elog(LOG, "index scan");
 			result = (PlanState *) ExecInitIndexScan((IndexScan *) node,
 													 estate, eflags);
+            fake_node = (PlanState *) ExecInitSeqScan((SeqScan *) node,
+                                          estate, eflags);
+            ExecSetExecProcNode(fake_node, fake_node->ExecProcNode);
+            result->second_ExecProcNode = fake_node;
+            result->instrument = InstrAlloc(1, estate->es_instrument,
+                                            result->async_capable);
 			break;
 
 		case T_IndexOnlyScan:
+            elog(LOG, "index only scan");
 			result = (PlanState *) ExecInitIndexOnlyScan((IndexOnlyScan *) node,
 														 estate, eflags);
 			break;
@@ -477,12 +491,16 @@ ExecProcNodeFirst(PlanState *node)
 static TupleTableSlot *
 ExecProcNodeInstr(PlanState *node)
 {
+    elog(LOG, "ExecProcNodeInstr");
     static int count = 0;
 	TupleTableSlot *result;
 
 	InstrStartNode(node->instrument);
-    if (count == 20){
-        result = node->second_ExecProcNode(node);
+
+    if (count >= 20 && node->second_ExecProcNode != NULL){
+        elog(LOG, "501");
+        result = node->second_ExecProcNode->ExecProcNodeReal(node);
+
     }else {
         result = node->ExecProcNodeReal(node);
     }

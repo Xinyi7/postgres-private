@@ -1466,7 +1466,9 @@ static void
 ExecEndPlan(PlanState *planstate, EState *estate)
 {
 	ListCell   *l;
-
+    if (planstate->second_ExecProcNode != NULL){
+        ExecEndNode(planstate->second_ExecProcNode);
+    }
 	/*
 	 * shut down the node-type-specific query processing
 	 */

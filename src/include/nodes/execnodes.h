@@ -1004,7 +1004,7 @@ typedef struct PlanState
 	ExecProcNodeMtd ExecProcNode;	/* function to return next tuple */
 	ExecProcNodeMtd ExecProcNodeReal;	/* actual function, if above is a
 										 * wrapper */
-    ExecProcNodeMtd second_ExecProcNode;
+    struct PlanState* second_ExecProcNode;
 	Instrumentation *instrument;	/* Optional runtime stats for this node */
 	WorkerInstrumentation *worker_instrument;	/* per-worker instrumentation */
 

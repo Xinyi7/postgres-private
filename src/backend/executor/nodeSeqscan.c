@@ -144,7 +144,7 @@ ExecInitSeqScan(SeqScan *node, EState *estate, int eflags)
 
 	scanstate->ss.ps.state = estate;
 	scanstate->ss.ps.ExecProcNode = ExecSeqScan;
-    scanstate->ss.ps.second_ExecProcNode = ExecSeqScan_placeholder;
+//    scanstate->ss.ps.second_ExecProcNode = ExecIndexScan;
 	/*
 	 * Miscellaneous initialization
 	 *

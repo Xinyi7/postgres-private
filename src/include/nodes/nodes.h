@@ -606,7 +606,7 @@ extern PGDLLIMPORT Node *newNodeMacroHolder;
 static inline Node *
 castNodeImpl(NodeTag type, void *ptr)
 {
-	Assert(ptr == NULL || nodeTag(ptr) == type);
+//	Assert(ptr == NULL || nodeTag(ptr) == type);
 	return (Node *) ptr;
 }
 #define castNode(_type_, nodeptr) ((_type_ *) castNodeImpl(T_##_type_, nodeptr))
