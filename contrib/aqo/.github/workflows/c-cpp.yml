@@ -1,0 +1,93 @@
+name: 'AQO basic CI'
+
+env:
+  # Use it just for a report
+  BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
+# Trigger it each timeon push or pull request. Honestly, it will be redundant
+# most of the time, but external pull-request checks don't be missed out.
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: "Define PostreSQL major version"
+      run: |
+        echo "The action workflow is triggered by the $BRANCH_NAME"
+        sudo apt install libipc-run-perl
+        git config --global user.email "ci@postgrespro.ru"
+        git config --global user.name "CI PgPro admin"
+
+        patch_name=$(ls aqo_*.patch|tail -1)
+        echo "CORE_PATCH_NAME=$patch_name" >> $GITHUB_ENV
+
+        # we can get number, otherwise set up master
+        vers_number=$(echo "$patch_name"|tr -d -c 0-9)
+        echo "PG_MAJOR_VERSION=$vers_number" >> $GITHUB_ENV
+
+        branch_name="REL_${vers_number}_STABLE"
+        echo "PG_BRANCH=$branch_name" >> $GITHUB_ENV
+    - name: "Set master branch name, if needed"
+      if: env.PG_MAJOR_VERSION == ''
+      run: |
+        branch_name="master"
+        echo "PG_BRANCH=$branch_name" >> $GITHUB_ENV
+
+    # Create workspace directory and environment variable.
+    # It is the second step because on the first we define versions and branches
+    - name: "Initial dir"
+      run: |
+        git clone -b $PG_BRANCH --depth=1 --single-branch https://github.com/postgres/postgres.git $GITHUB_WORKSPACE/../pg
+
+        # Invent variable with full path to PG directory just because github
+        # actions don't like relative paths ...
+        cd $GITHUB_WORKSPACE/../pg
+        echo PG_DIR=`pwd` >> $GITHUB_ENV
+
+    - name: "Prepare PG directory"
+      run: |
+        cd $PG_DIR
+        cp -r ../aqo contrib/aqo
+        patch -p1 --no-backup-if-mismatch < contrib/aqo/$CORE_PATCH_NAME
+        echo "COPT=-Werror" >> $GITHUB_ENV
+        echo "CONFIGURE_OPTS=--prefix=`pwd`/tmp_install --enable-tap-tests --enable-cassert" >> $GITHUB_ENV
+
+    # Just for debug
+    - name: "Environment (debug output)"
+      if: ${{ always() }}
+      run: |
+        echo "PG_MAJOR_VERSION: $PG_MAJOR_VERSION"
+        echo "PG_DIR: $PG_DIR"
+        echo "PG_BRANCH: $PG_BRANCH"
+        echo "CORE_PATCH_NAME: $CORE_PATCH_NAME"
+
+    - name: "make check"
+      run: |
+        cd $PG_DIR
+        ./configure $CONFIGURE_OPTS CFLAGS="-O2" > /dev/null
+        make -j4 > /dev/null && make -j4 -C contrib > /dev/null
+        env CLIENTS=50 THREADS=50 make -C contrib/aqo check
+
+        echo "Use AQO with debug code included"
+        git clean -fdx
+        git -C contrib/aqo clean -fdx
+        ./configure $CONFIGURE_OPTS CFLAGS="-DAQO_DEBUG_PRINT -O0" > /dev/null
+        make -j4 > /dev/null && make -j4 -C contrib > /dev/null
+        env CLIENTS=50 THREADS=50 make -C contrib/aqo check
+
+    - name: Archive artifacts
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: make_check_logs
+        path: |
+          ${{ env.PG_DIR }}/contrib/aqo/regression.diffs
+          ${{ env.PG_DIR }}/contrib/aqo/log
+          ${{ env.PG_DIR }}/contrib/aqo/tmp_check/log
+        retention-days: 7
