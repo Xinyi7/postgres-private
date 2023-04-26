@@ -933,16 +933,7 @@ InitPlan(QueryDesc *queryDesc, int eflags)
 	 * tree.  This opens files, allocates storage and leaves us ready to start
 	 * processing tuples.
 	 */
-    FILE * plan_file = fopen("test.bin","wb");
-    fwrite (plan, sizeof(struct Plan), 1, plan_file);
-    fclose(plan_file);
-
-    plan_file = fopen("test.bin","rb");
-    fread(plan,sizeof(struct Plan),1,plan_file);
-    fclose(plan_file);
-
 	planstate = ExecInitNode(plan, estate, eflags);
-
 
 	/*
 	 * Get the tuple descriptor describing the type of tuples to return.

@@ -1666,6 +1666,11 @@ ReadCommonPlan(Plan *local_node)
 	READ_NODE_FIELD(initPlan);
 	READ_BITMAPSET_FIELD(extParam);
 	READ_BITMAPSET_FIELD(allParam);
+	local_node->ext_nodes = NIL;
+	/* READ_NODE_FIELD(ext_nodes);
+	 * Don't serialize this field. It is required to serialize RestrictInfo and
+	 * EqualenceClass.
+	*/
 }
 
 /*

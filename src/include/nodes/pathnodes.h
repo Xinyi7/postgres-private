@@ -757,6 +757,10 @@ typedef struct RelOptInfo
 	Relids		top_parent_relids;	/* Relids of topmost parents (if "other"
 									 * rel) */
 
+	/* For Adaptive optimization DEBUG purposes */
+	double		predicted_cardinality;
+	int			fss_hash;
+
 	/* used for partitioned relations: */
 	PartitionScheme part_scheme;	/* Partitioning scheme */
 	int			nparts;			/* Number of partitions; -1 if not yet set; in
@@ -774,7 +778,13 @@ typedef struct RelOptInfo
 	Relids		all_partrels;	/* Relids set of all partition relids */
 	List	  **partexprs;		/* Non-nullable partition key expressions */
 	List	  **nullable_partexprs; /* Nullable partition key expressions */
-} RelOptInfo;
+
+	/*
+	 * At this list an extension can add additional nodes to pass an info along
+	 * the planning and executing stages.
+	 */
+	List		*ext_nodes;
+} 	RelOptInfo;
 
 /*
  * Is given relation partitioned?
@@ -1143,6 +1153,10 @@ typedef struct ParamPathInfo
 	Relids		ppi_req_outer;	/* rels supplying parameters used by path */
 	Cardinality ppi_rows;		/* estimated number of result tuples */
 	List	   *ppi_clauses;	/* join clauses available from outer rels */
+
+	/* AQO DEBUG purposes */
+	double predicted_ppi_rows;
+	double fss_ppi_hash;
 } ParamPathInfo;
 
 

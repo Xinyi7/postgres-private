@@ -82,12 +82,27 @@
 #include "utils/timeout.h"
 #include "utils/timestamp.h"
 
+#include "access/relation.h"
+#include "access/table.h"
+#include "catalog/objectaccess.h"
+#include "catalog/pg_extension.h"
+#include "commands/extension.h"
+#include "miscadmin.h"
+#include "utils/selfuncs.h"
+#include "../../contrib/aqo/aqo.h"
+#include "../../contrib/aqo/aqo_shared.h"
+#include "../../contrib/aqo/path_utils.h"
+#include "../../contrib/aqo/storage.h"
+
+static void
+aqo_bgworker_background_process_startup(const char *query_string, List * querytree_list);
+
 /* ----------------
  *		global variables
  * ----------------
  */
 const char *debug_query_string; /* client-supplied query string */
-
+bool aqo_enable;
 /* Note: whereToSendOutput is initialized for the bootstrap/standalone case */
 CommandDest whereToSendOutput = DestDebug;
 
@@ -991,6 +1006,8 @@ pg_plan_queries(List *querytrees, const char *query_string, int cursorOptions,
 static void
 exec_simple_query(const char *query_string)
 {
+
+
 	CommandDest dest = whereToSendOutput;
 	MemoryContext oldcontext;
 	List	   *parsetree_list;
@@ -1068,6 +1085,7 @@ exec_simple_query(const char *query_string)
 	 * transaction block.
 	 */
 	use_implicit_block = (list_length(parsetree_list) > 1);
+
 
 	/*
 	 * Run through the raw parsetree(s) and process each one.
@@ -1168,6 +1186,11 @@ exec_simple_query(const char *query_string)
 
 		plantree_list = pg_plan_queries(querytree_list, query_string,
 										CURSOR_OPT_PARALLEL_OK, NULL);
+        set_aqo_enable();
+        elog(LOG, "1190");
+        if (aqo_enable) {
+            aqo_bgworker_background_process_startup(query_string, querytree_list);
+        }
 
 		/*
 		 * Done with the snapshot used for parsing/planning.
@@ -1317,6 +1340,7 @@ exec_simple_query(const char *query_string)
 		if (per_parsetree_context)
 			MemoryContextDelete(per_parsetree_context);
 	}							/* end loop over parsetrees */
+
 
 	/*
 	 * Close down transaction statement, if one is open.  (This will only do
@@ -3624,6 +3648,21 @@ set_debug_options(int debug_flag, GucContext context, GucSource source)
 		SetConfigOption("debug_print_rewritten", "true", context, source);
 }
 
+static void
+aqo_free_callback(ResourceReleasePhase phase,
+                  bool isCommit,
+                  bool isTopLevel,
+                  void *arg)
+{
+    if (phase != RESOURCE_RELEASE_AFTER_LOCKS)
+        return;
+
+    if (isTopLevel)
+    {
+        MemoryContextReset(AQOCacheMemCtx);
+        cur_classes = NIL;
+    }
+}
 
 bool
 set_plan_disabling_options(const char *arg, GucContext context, GucSource source)
@@ -5050,4 +5089,280 @@ disable_statement_timeout(void)
 {
 	if (get_timeout_active(STATEMENT_TIMEOUT))
 		disable_timeout(STATEMENT_TIMEOUT, false);
+}
+
+
+//static void
+//startup_background_process_main(Datum main_arg){
+//
+//    aqo_shmem_init();
+//    aqo_preprocessing_init();
+//    aqo_postprocessing_init();
+//    aqo_cardinality_hooks_init();
+//    aqo_path_utils_init();
+//
+//    init_deactivated_queries_storage();
+//
+//    /*
+//     * Create own Top memory Context for reporting AQO memory in the future.
+//     */
+//    AQOTopMemCtx = AllocSetContextCreate(TopMemoryContext,
+//                                         "AQOTopMemoryContext",
+//                                         ALLOCSET_DEFAULT_SIZES);
+//    /*
+//     * AQO Cache Memory Context containe environment data.
+//     */
+//    AQOCacheMemCtx = AllocSetContextCreate(AQOTopMemCtx,
+//                                           "AQOCacheMemCtx",
+//                                           ALLOCSET_DEFAULT_SIZES);
+//
+//    /*
+//     * AQOPredictMemoryContext save necessary information for making predict of plan nodes
+//     * and clean up in the execution stage of query.
+//     */
+//    AQOPredictMemCtx = AllocSetContextCreate(AQOTopMemCtx,
+//                                             "AQOPredictMemoryContext",
+//                                             ALLOCSET_DEFAULT_SIZES);
+//    /*
+//     * AQOLearnMemoryContext save necessary information for writing down to AQO knowledge table
+//     * and clean up after doing this operation.
+//     */
+//    AQOLearnMemCtx = AllocSetContextCreate(AQOTopMemCtx,
+//                                           "AQOLearnMemoryContext",
+//                                           ALLOCSET_DEFAULT_SIZES);
+//    RegisterResourceReleaseCallback(aqo_free_callback, NULL);
+//    RegisterAQOPlanNodeMethods();
+//
+//    MarkGUCPrefixReserved("aqo");
+//
+//
+//    const char * query_string = MyBgworkerEntry->bgw_extra;
+//
+//    CommandDest dest = whereToSendOutput;
+//    MemoryContext oldcontext;
+//    List	   *parsetree_list;
+//    ListCell   *parsetree_item;
+//    bool		save_log_statement_stats = log_statement_stats;
+//    bool		was_logged = false;
+//    bool		use_implicit_block;
+//    char		msec_str[32];
+//
+//    /*
+//     * Report query to various monitoring facilities.
+//     */
+//    debug_query_string = query_string;
+//
+//    pgstat_report_activity(STATE_RUNNING, query_string);
+//
+//    TRACE_POSTGRESQL_QUERY_START(query_string);
+//
+//    /*
+//     * We use save_log_statement_stats so ShowUsage doesn't report incorrect
+//     * results because ResetUsage wasn't called.
+//     */
+//    if (save_log_statement_stats)
+//        ResetUsage();
+//
+//    /*
+//     * Start up a transaction command.  All queries generated by the
+//     * query_string will be in this same command block, *unless* we find a
+//     * BEGIN/COMMIT/ABORT statement; we have to force a new xact command after
+//     * one of those, else bad things will happen in xact.c. (Note that this
+//     * will normally change current memory context.)
+//     */
+//    start_xact_command();
+//
+//    /*
+//     * Zap any pre-existing unnamed statement.  (While not strictly necessary,
+//     * it seems best to define simple-Query mode as if it used the unnamed
+//     * statement and portal; this ensures we recover any storage used by prior
+//     * unnamed operations.)
+//     */
+//    drop_unnamed_stmt();
+//
+//    /*
+//     * Switch to appropriate context for constructing parsetrees.
+//     */
+//    oldcontext = MemoryContextSwitchTo(MessageContext);
+//
+//    /*
+//     * Do basic parsing of the query or queries (this should be safe even if
+//     * we are in aborted transaction state!)
+//     */
+//    parsetree_list = pg_parse_query(query_string);
+//
+//    /* Log immediately if dictated by log_statement */
+//    if (check_log_statement(parsetree_list))
+//    {
+//        ereport(LOG,
+//                (errmsg("statement: %s", query_string),
+//                        errhidestmt(true),
+//                        errdetail_execute(parsetree_list)));
+//        was_logged = true;
+//    }
+//
+//    /*
+//     * Switch back to transaction context to enter the loop.
+//     */
+//    MemoryContextSwitchTo(oldcontext);
+//
+//    /*
+//     * For historical reasons, if multiple SQL statements are given in a
+//     * single "simple Query" message, we execute them as a single transaction,
+//     * unless explicit transaction control commands are included to make
+//     * portions of the list be separate transactions.  To represent this
+//     * behavior properly in the transaction machinery, we use an "implicit"
+//     * transaction block.
+//     */
+//    use_implicit_block = (list_length(parsetree_list) > 1);
+//
+//    /*
+//     * Run through the raw parsetree(s) and process each one.
+//     */
+//    foreach(parsetree_item, parsetree_list)
+//    {
+//        RawStmt *parsetree = lfirst_node(RawStmt, parsetree_item);
+//        bool snapshot_set = false;
+//        CommandTag commandTag;
+//        QueryCompletion qc;
+//        MemoryContext per_parsetree_context = NULL;
+//        List *querytree_list,
+//                *plantree_list;
+//        Portal portal;
+//        DestReceiver *receiver;
+//        int16 format;
+//
+//        pgstat_report_query_id(0, true);
+//
+//        /*
+//         * Get the command name for use in status display (it also becomes the
+//         * default completion tag, down inside PortalRun).  Set ps_status and
+//         * do any special start-of-SQL-command processing needed by the
+//         * destination.
+//         */
+//        commandTag = CreateCommandTag(parsetree->stmt);
+//
+//        set_ps_display(GetCommandTagName(commandTag));
+//
+//        BeginCommand(commandTag, dest);
+//
+//        /*
+//         * If we are in an aborted transaction, reject all commands except
+//         * COMMIT/ABORT.  It is important that this test occur before we try
+//         * to do parse analysis, rewrite, or planning, since all those phases
+//         * try to do database accesses, which may fail in abort state. (It
+//         * might be safe to allow some additional utility commands in this
+//         * state, but not many...)
+//         */
+//        if (IsAbortedTransactionBlockState() &&
+//            !IsTransactionExitStmt(parsetree->stmt))
+//            ereport(ERROR,
+//                    (errcode(ERRCODE_IN_FAILED_SQL_TRANSACTION),
+//                            errmsg("current transaction is aborted, "
+//                                   "commands ignored until end of transaction block"),
+//                            errdetail_abort()));
+//
+//        /* Make sure we are in a transaction command */
+//        start_xact_command();
+//
+//        /*
+//         * If using an implicit transaction block, and we're not already in a
+//         * transaction block, start an implicit block to force this statement
+//         * to be grouped together with any following ones.  (We must do this
+//         * each time through the loop; otherwise, a COMMIT/ROLLBACK in the
+//         * list would cause later statements to not be grouped.)
+//         */
+//        if (use_implicit_block)
+//            BeginImplicitTransactionBlock();
+//
+//        /* If we got a cancel signal in parsing or prior command, quit */
+//        CHECK_FOR_INTERRUPTS();
+//
+//        /*
+//         * Set up a snapshot if parse analysis/planning will need one.
+//         */
+//        if (analyze_requires_snapshot(parsetree)) {
+//            PushActiveSnapshot(GetTransactionSnapshot());
+//            snapshot_set = true;
+//        }
+//
+//        /*
+//         * OK to analyze, rewrite, and plan this query.
+//         *
+//         * Switch to appropriate context for constructing query and plan trees
+//         * (these can't be in the transaction context, as that will get reset
+//         * when the command is COMMIT/ROLLBACK).  If we have multiple
+//         * parsetrees, we use a separate context for each one, so that we can
+//         * free that memory before moving on to the next one.  But for the
+//         * last (or only) parsetree, just use MessageContext, which will be
+//         * reset shortly after completion anyway.  In event of an error, the
+//         * per_parsetree_context will be deleted when MessageContext is reset.
+//         */
+//        if (lnext(parsetree_list, parsetree_item) != NULL) {
+//            per_parsetree_context =
+//                    AllocSetContextCreate(MessageContext,
+//                                          "per-parsetree message context",
+//                                          ALLOCSET_DEFAULT_SIZES);
+//            oldcontext = MemoryContextSwitchTo(per_parsetree_context);
+//        } else
+//            oldcontext = MemoryContextSwitchTo(MessageContext);
+//
+//        querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, query_string,
+//                                                            NULL, 0, NULL);
+//
+//
+//        List * plan = pg_plan_queries(querytree_list, query_string,
+//                               CURSOR_OPT_PARALLEL_OK, NULL);
+//    }
+//}
+
+static void
+aqo_bgworker_background_process_startup(const char *query_string, List * querytree_list)
+{
+    BackgroundWorker		worker;
+    BackgroundWorkerHandle	*handle;
+    BgwHandleStatus			status;
+    pid_t					pid;
+
+    MemSet(&worker, 0, sizeof(worker));
+
+    worker.bgw_flags = BGWORKER_SHMEM_ACCESS |
+                       BGWORKER_BACKEND_DATABASE_CONNECTION;
+    worker.bgw_start_time = BgWorkerStart_ConsistentState;
+    worker.bgw_restart_time = BGW_NEVER_RESTART;
+    worker.bgw_main_arg = PointerGetDatum(querytree_list);
+
+    memcpy(worker.bgw_extra, query_string, strlen(query_string));
+    memcpy(worker.bgw_function_name, "startup_background_process_main", 32);
+    memcpy(worker.bgw_library_name, "aqo", 4);
+    memcpy(worker.bgw_name, "aqo background", 15);
+
+    /* must set notify PID to wait for startup */
+    worker.bgw_notify_pid = MyProcPid;
+
+    if (!RegisterDynamicBackgroundWorker(&worker, &handle))
+        ereport(NOTICE,
+                (errcode(ERRCODE_CONFIGURATION_LIMIT_EXCEEDED),
+                        errmsg("could not register background process"),
+                        errhint("You might need to increase max_worker_processes.")));
+
+    status = WaitForBackgroundWorkerStartup(handle, &pid);
+    if (status != BGWH_STARTED)
+        ereport(NOTICE,
+                (errcode(ERRCODE_INSUFFICIENT_RESOURCES),
+                        errmsg("could not start background process"),
+                        errhint("More details may be available in the server log.")));
+
+}
+
+
+void set_aqo_enable(){
+    const char* my_var = GetConfigOption("aqo_enable", true, false);
+    elog(LOG, "aqo_enable: %s", my_var);
+    if(my_var!=NULL && strcmp(my_var,"on")==0){
+        aqo_enable = true;
+    }
+    else{
+        aqo_enable = false;
+    }
 }

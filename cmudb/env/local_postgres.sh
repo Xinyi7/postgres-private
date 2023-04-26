@@ -24,6 +24,6 @@ make clean
 make install -j
 make clean
 cd "${ROOT_DIR}"
-echo -e "\nshared_preload_libraries = 'db721_fdw'\n" >>"${BIN_DIR}"/pgdata/postgresql.auto.conf
+echo -e "\nshared_preload_libraries = 'db721_fdw, aqo'\n" >>"${BIN_DIR}"/pgdata/postgresql.auto.conf
 
 "${BIN_DIR}"/postgres -D "${BIN_DIR}"/pgdata -p ${POSTGRES_PORT}

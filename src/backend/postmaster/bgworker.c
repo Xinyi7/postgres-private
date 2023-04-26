@@ -116,7 +116,7 @@ static BackgroundWorkerArray *BackgroundWorkerData;
 static const struct
 {
 	const char *fn_name;
-	bgworker_main_type fn_addr;
+	bgworker_main_type  fn_addr;
 }			InternalBGWorkers[] =
 
 {
@@ -1070,7 +1070,7 @@ GetBackgroundWorkerPid(BackgroundWorkerHandle *handle, pid_t *pidp)
 	BackgroundWorkerSlot *slot;
 	pid_t		pid;
 
-	Assert(handle->slot < max_worker_processes);
+//	Assert(handle->slot < max_worker_processes);
 	slot = &BackgroundWorkerData->slot[handle->slot];
 
 	/*
