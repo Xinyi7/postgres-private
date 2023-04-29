@@ -14,6 +14,7 @@
 
 
 AQOSharedState *aqo_state = NULL;
+List *aqo_query_tree = NULL;
 int fs_max_items = 10000; /* Max number of different feature spaces in ML model */
 int fss_max_items = 100000; /* Max number of different feature subspaces in ML model */
 
@@ -59,6 +60,8 @@ aqo_init_shmem(void)
 		LWLockInitialize(&aqo_state->data_lock, LWLockNewTrancheId());
 		LWLockInitialize(&aqo_state->queries_lock, LWLockNewTrancheId());
 	}
+    found = false;
+//    aqo_query_tree = ShmemInitStruct("AQO shared query tree pointer", fss_max_items, &found);
 
 	info.keysize = sizeof(((StatEntry *) 0)->queryid);
 	info.entrysize = sizeof(StatEntry);
@@ -82,6 +85,8 @@ aqo_init_shmem(void)
 	info.entrysize = sizeof(QueriesEntry);
 	queries_htab = ShmemInitHash("AQO Queries HTAB", fs_max_items, fs_max_items,
 								 &info, HASH_ELEM | HASH_BLOBS);
+
+
 
 	LWLockRelease(AddinShmemInitLock);
 	LWLockRegisterTranche(aqo_state->lock.tranche, "AQO");

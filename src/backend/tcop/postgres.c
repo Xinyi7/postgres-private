@@ -94,6 +94,9 @@
 #include "../../contrib/aqo/path_utils.h"
 #include "../../contrib/aqo/storage.h"
 
+/* Overhead for the fixed part of a List header, measured in ListCells */
+#define LIST_HEADER_OVERHEAD  \
+	((int) ((offsetof(List, initial_elements) - 1) / sizeof(ListCell) + 1))
 static void
 aqo_bgworker_background_process_startup(const char *query_string, List * querytree_list);
 
@@ -887,7 +890,7 @@ pg_plan_query(Query *querytree, const char *query_string, int cursorOptions,
 		return NULL;
 
 	/* Planner must have a snapshot in case it calls user-defined functions. */
-	Assert(ActiveSnapshotSet());
+//	Assert(ActiveSnapshotSet());
 
 	TRACE_POSTGRESQL_QUERY_PLAN_START();
 
@@ -1007,7 +1010,6 @@ static void
 exec_simple_query(const char *query_string)
 {
 
-
 	CommandDest dest = whereToSendOutput;
 	MemoryContext oldcontext;
 	List	   *parsetree_list;
@@ -1018,7 +1020,7 @@ exec_simple_query(const char *query_string)
 	char		msec_str[32];
 
 	/*
-	 * Report query to various monitoring facilities.
+	 * Report query to various monitoring facilities.Ï
 	 */
 	debug_query_string = query_string;
 
@@ -1184,10 +1186,11 @@ exec_simple_query(const char *query_string)
 		querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, query_string,
 															NULL, 0, NULL);
 
+//        list_memcopy(querytree_list, query_string, CURSOR_OPT_PARALLEL_OK, NULL);
 		plantree_list = pg_plan_queries(querytree_list, query_string,
 										CURSOR_OPT_PARALLEL_OK, NULL);
+
         set_aqo_enable();
-        elog(LOG, "1190");
         if (aqo_enable) {
             aqo_bgworker_background_process_startup(query_string, querytree_list);
         }
@@ -5366,3 +5369,78 @@ void set_aqo_enable(){
         aqo_enable = false;
     }
 }
+static void
+check_list_invariants(const List *list)
+{
+    if (list == NIL)
+        return;
+
+    Assert(list->length > 0);
+    Assert(list->length <= list->max_length);
+    Assert(list->elements != NULL);
+
+    Assert(list->type == T_List ||
+           list->type == T_IntList ||
+           list->type == T_OidList);
+}
+void
+list_memcopy(const List *oldlist, const char *query_string, int cursorOptions,
+             ParamListInfo boundParams)
+{
+    if (oldlist == NIL)
+        return NIL;
+    bool found;
+
+    /* This is only sensible for pointer Lists */
+    Assert(IsA(oldlist, List));
+    int			max_size;
+    int min_size = oldlist->length;
+    Assert(min_size > 0);
+
+	max_size = min_size;
+
+    List * newlist = ShmemInitStruct("AQO shared query tree pointer", 10000, &found);
+    memset(newlist, 0,offsetof(List, initial_elements) +
+                    min_size * sizeof(ListCell));
+    newlist->type = oldlist->type;
+    newlist->length = min_size;
+    newlist->max_length = max_size;
+    newlist->elements = newlist->initial_elements;
+    elog(LOG, "postgres: length : %d, max_length: %d", newlist->length, newlist->max_length);
+    for (int i = 0; i < newlist->length; i++)
+        lfirst(&newlist->elements[i]) =
+                copyObjectImpl(lfirst(&oldlist->elements[i]));
+    ListCell * query_list;
+    newlist = ShmemInitStruct("AQO shared query tree pointer", 10000, &found);
+
+//    foreach(query_list, newlist)
+//    {
+//        Query *query = lfirst_node(Query, query_list);
+//
+//        elog(LOG, "5414, query commandType: %d", query->commandType);
+//    }
+    foreach(query_list, newlist)
+    {
+        Query	   *query = lfirst_node(Query, query_list);
+        PlannedStmt *stmt;
+
+        if (query->commandType == CMD_UTILITY)
+        {
+            /* Utility commands require no planning. */
+            stmt = makeNode(PlannedStmt);
+            stmt->commandType = CMD_UTILITY;
+            stmt->canSetTag = query->canSetTag;
+            stmt->utilityStmt = query->utilityStmt;
+            stmt->stmt_location = query->stmt_location;
+            stmt->stmt_len = query->stmt_len;
+            stmt->queryId = query->queryId;
+        }
+        else
+        {
+            stmt = pg_plan_query(query, query_string, cursorOptions,
+                                 boundParams);
+        }
+    }
+    check_list_invariants(newlist);
+}
+

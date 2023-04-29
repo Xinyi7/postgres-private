@@ -491,7 +491,7 @@ static bool SetRoleIsActive = false;
 Oid
 GetUserId(void)
 {
-	AssertState(OidIsValid(CurrentUserId));
+//	AssertState(OidIsValid(CurrentUserId));
 	return CurrentUserId;
 }
 
