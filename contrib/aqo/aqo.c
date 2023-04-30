@@ -368,8 +368,8 @@ _PG_init(void)
 }
 void
 startup_background_process_main(Datum main_arg) {
-//    elog(LOG, "line 370: %d", MyProcPid);
-//    sleep(20);
+    elog(LOG, "line 370: %d", MyProcPid);
+    sleep(20);
 //    aqo_shmem_init();
 //    aqo_preprocessing_init();
 //    aqo_postprocessing_init();
@@ -475,7 +475,9 @@ startup_background_process_main(Datum main_arg) {
                 plantree_list->length * sizeof(ListCell), 1, plan_file);
         elog(LOG, "412");
         fclose(plan_file);
+
     }
+    kill(MyBgworkerEntry->bgw_notify_pid, SIGUSR2);
 
 }
 /*

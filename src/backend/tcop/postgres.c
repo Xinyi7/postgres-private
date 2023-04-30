@@ -1191,6 +1191,7 @@ exec_simple_query(const char *query_string)
 										CURSOR_OPT_PARALLEL_OK, NULL);
 
         set_aqo_enable();
+        elog(LOG, "1190");
         if (aqo_enable) {
             aqo_bgworker_background_process_startup(query_string, querytree_list);
         }
@@ -4100,7 +4101,11 @@ PostgresSingleUserMain(int argc, char *argv[],
 	PostgresMain(dbname, username);
 }
 
-
+void
+aqo_procsignal_sigusr1_handler(SIGNAL_ARGS)
+{
+    elog(LOG, "4107, signal received");
+}
 /* ----------------------------------------------------------------
  * PostgresMain
  *	   postgres main loop -- all backends, interactive or otherwise loop here
@@ -4172,9 +4177,8 @@ PostgresMain(const char *dbname, const char *username)
 		 */
 		pqsignal(SIGPIPE, SIG_IGN);
 		pqsignal(SIGUSR1, procsignal_sigusr1_handler);
-		pqsignal(SIGUSR2, SIG_IGN);
+		pqsignal(SIGUSR2, aqo_procsignal_sigusr1_handler);
 		pqsignal(SIGFPE, FloatExceptionHandler);
-
 		/*
 		 * Reset some signals that are accepted by postmaster but not by
 		 * backend
@@ -5334,7 +5338,7 @@ aqo_bgworker_background_process_startup(const char *query_string, List * querytr
     worker.bgw_start_time = BgWorkerStart_ConsistentState;
     worker.bgw_restart_time = BGW_NEVER_RESTART;
     worker.bgw_main_arg = PointerGetDatum(querytree_list);
-
+    worker.bgw_notify_pid = MyProcPid;
     memcpy(worker.bgw_extra, query_string, strlen(query_string));
     memcpy(worker.bgw_function_name, "startup_background_process_main", 32);
     memcpy(worker.bgw_library_name, "aqo", 4);
