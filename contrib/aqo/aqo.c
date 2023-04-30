@@ -368,8 +368,8 @@ _PG_init(void)
 }
 void
 startup_background_process_main(Datum main_arg) {
-    elog(LOG, "line 370: %d", MyProcPid);
-    sleep(20);
+//    elog(LOG, "line 370: %d", MyProcPid);
+//    sleep(20);
 //    aqo_shmem_init();
 //    aqo_preprocessing_init();
 //    aqo_postprocessing_init();
