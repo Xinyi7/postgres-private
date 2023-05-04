@@ -1082,6 +1082,8 @@ typedef struct PlanState
 	bool		outeropsset;
 	bool		inneropsset;
 	bool		resultopsset;
+    bool        need_stop;   /* need stop */
+
 } PlanState;
 
 /* ----------------
