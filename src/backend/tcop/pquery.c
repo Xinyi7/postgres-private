@@ -74,14 +74,13 @@ CreateQueryDesc(PlannedStmt *plannedstmt,
 				int instrument_options)
 {
 	QueryDesc  *qd = (QueryDesc *) palloc(sizeof(QueryDesc));
-
 	qd->operation = plannedstmt->commandType;	/* operation */
 	qd->plannedstmt = plannedstmt;	/* plan */
-	qd->sourceText = sourceText;	/* query text */
-	qd->snapshot = RegisterSnapshot(snapshot);	/* snapshot */
-	/* RI check snapshot */
+    qd->sourceText = sourceText;	/* query text */
+    qd->snapshot = RegisterSnapshot(snapshot);	/* snapshot */
+    /* RI check snapshot */
 	qd->crosscheck_snapshot = RegisterSnapshot(crosscheck_snapshot);
-	qd->dest = dest;			/* output dest */
+    qd->dest = dest;			/* output dest */
 	qd->params = params;		/* parameter values passed into query */
 	qd->queryEnv = queryEnv;
 	qd->instrument_options = instrument_options;	/* instrumentation wanted? */
@@ -114,7 +113,36 @@ FreeQueryDesc(QueryDesc *qdesc)
 	/* Only the QueryDesc itself need be freed */
 	pfree(qdesc);
 }
-
+char* generate_query_file_sub(const char *query_string){
+    int query_hash_value = get_str_hash(query_string);
+    if (query_hash_value < 0) {
+        query_hash_value = -query_hash_value;
+    }
+    char num_str[20];
+    sprintf(num_str, "%d", query_hash_value);
+    char* file_path = "/home/ubuntu/multiprocess/postgres/postgres-private/sub/";
+    char* result_path = malloc(strlen(file_path) + strlen(num_str) + 4);
+    strcpy(result_path, file_path);
+    strcat(result_path, num_str);
+    strcat(result_path, ".txt");
+//    elog(LOG,"file_path is %s",result_path);
+    return result_path;
+}
+PlannedStmt * read_result_from_file(const char *query_string){
+//    elog(LOG,"read_result_from_file");
+    char* file_path = generate_query_file_sub(query_string);
+//    elog(LOG,"file_path for main is %s",file_path);
+    FILE *fp = fopen(file_path, "r");
+    if (fp == NULL) {
+//        elog(LOG,"main read open file failed");
+        return NULL;
+    }
+    char buffer[16384];
+    fread(buffer, sizeof(char), 16384, fp);
+    fclose(fp);
+    PlannedStmt *new_stmt = (PlannedStmt *)stringToNode(buffer);
+    return new_stmt;
+}
 
 /*
  * ProcessQuery
@@ -500,6 +528,17 @@ PortalStart(Portal portal, ParamListInfo params,
 											params,
 											portal->queryEnv,
 											0);
+                if(aqo_enable){
+                    portal->queryDescForSub = CreateQueryDesc(linitial_node(PlannedStmt, portal->stmts),
+                                                      portal->sourceText,
+                                                      GetActiveSnapshot(),
+                                                      InvalidSnapshot,
+                                                      None_Receiver,
+                                                      params,
+                                                      portal->queryEnv,
+                                                      0);
+                }
+
 
 				/*
 				 * If it's a scrollable cursor, executor needs to support
@@ -767,6 +806,21 @@ PortalRun(Portal portal, long count, bool isTopLevel, bool run_once,
 				 */
 				nprocessed = PortalRunSelect(portal, true, count, dest);
 
+                if(portal->queryDesc!=NULL && portal->queryDesc->planstate!=NULL && need_stop){
+                    admit_interrupt = false;
+                    need_stop = false;
+                    PlannedStmt *new_pstmt = read_result_from_file(portal->sourceText);
+                    if(new_pstmt!=NULL){
+//                        elog(LOG,"get new pstmt for main not null");
+                        ExecutorStart(portal->queryDescForSub, 0);
+                        portal->queryDescForSub->plannedstmt = new_pstmt;
+                        portal->queryDesc = portal->queryDescForSub;
+                        portal->atEnd = false;
+                        portal->queryDesc->already_executed = false;
+                        nprocessed = PortalRunSelect(portal, true, count, dest);
+                    }
+                }
+
 				/*
 				 * If the portal result contains a command tag and the caller
 				 * gave us a pointer to store it, copy it and update the
@@ -873,11 +927,13 @@ PortalRunSelect(Portal portal,
 	ScanDirection direction;
 	uint64		nprocessed;
 
+
 	/*
 	 * NB: queryDesc will be NULL if we are fetching from a held cursor or a
 	 * completed utility query; can't use it in that path.
 	 */
 	queryDesc = portal->queryDesc;
+
 
 	/* Caller messed up if we have neither a ready query nor held data. */
 	Assert(queryDesc || portal->holdStore);

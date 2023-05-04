@@ -16,6 +16,7 @@
 
 #include "executor/execdesc.h"
 #include "fmgr.h"
+#include "utils/guc.h"
 #include "nodes/lockoptions.h"
 #include "nodes/parsenodes.h"
 #include "utils/memutils.h"
@@ -96,6 +97,7 @@ extern void ExecRestrPos(PlanState *node);
 extern bool ExecSupportsMarkRestore(struct Path *pathnode);
 extern bool ExecSupportsBackwardScan(Plan *node);
 extern bool ExecMaterializesOutput(NodeTag plantype);
+
 
 /*
  * prototypes from functions in execCurrent.c
@@ -255,7 +257,11 @@ ExecProcNode(PlanState *node)
 {
 	if (node->chgParam != NULL) /* something changed? */
 		ExecReScan(node);		/* let ReScan handle this */
-
+    if(aqo_enable && admit_interrupt && need_stop){
+//        elog(LOG,"stop here");
+        node->need_stop = true;
+        return NULL;
+    }
 	return node->ExecProcNode(node);
 }
 #endif

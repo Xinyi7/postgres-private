@@ -118,7 +118,77 @@ aqo_free_callback(ResourceReleasePhase phase,
 		cur_classes = NIL;
 	}
 }
-
+int
+get_str_hash(const char *str)
+{
+    return DatumGetInt32(hash_any((const unsigned char *) str,
+                                  strlen(str) * sizeof(*str)));
+}
+char* generate_query_file_main(const char *query_string){
+    int query_hash_value = get_str_hash(query_string);
+    if (query_hash_value < 0) {
+        query_hash_value = -query_hash_value;
+    }
+    char num_str[20];
+    sprintf(num_str, "%d", query_hash_value);
+    char* file_path = "/home/ubuntu/multiprocess/postgres/postgres-private/main/";
+    char* result_path = malloc(strlen(file_path) + strlen(num_str) + 4);
+    strcpy(result_path, file_path);
+    strcat(result_path, num_str);
+    strcat(result_path, ".txt");
+//    elog(LOG,"main file_path is %s",result_path);
+    return result_path;
+}
+char* generate_query_file_sub(const char *query_string){
+    int query_hash_value = get_str_hash(query_string);
+    if (query_hash_value < 0) {
+        query_hash_value = -query_hash_value;
+    }
+    char num_str[20];
+    sprintf(num_str, "%d", query_hash_value);
+    char* file_path = "/home/ubuntu/multiprocess/postgres/postgres-private/sub/";
+    char* result_path = malloc(strlen(file_path) + strlen(num_str) + 4);
+    strcpy(result_path, file_path);
+    strcat(result_path, num_str);
+    strcat(result_path, ".txt");
+//    elog(LOG,"sub file_path is %s",result_path);
+    return result_path;
+}
+void write_result_to_file_for_sub(const char *query_string, PlannedStmt *pstmt){
+    char* file_path = generate_query_file_sub(query_string);
+    if(access(file_path, F_OK)!=-1){
+//        elog(LOG,"file exist for sub");
+        return;
+    }
+    FILE *fp = fopen(file_path, "w");
+    char * plan_string = nodeToString(pstmt);
+    if (fp == NULL) {
+//        elog(LOG,"sub write open file failed");
+        return;
+    }
+    fwrite(plan_string,  sizeof(char), strlen(plan_string), fp);
+    fclose(fp);
+}
+PlannedStmt * read_result_from_file_for_sub(const char *query_string){
+    char *select_str = strstr(query_string, "select");  // Find the first occurrence of "select"
+    if (select_str != NULL) {
+        memmove(query_string, select_str, strlen(select_str) + 1);  // Copy the remaining substring to the beginning of the string
+    }
+    else{
+        return NULL;
+    }
+    char* file_path = generate_query_file_main(query_string);
+    FILE *fp = fopen(file_path, "r");
+    if (fp == NULL) {
+//        elog(LOG,"sub read open file failed");
+        return NULL;
+    }
+    char buffer[16384];
+    fread(buffer, sizeof(char), 16384, fp);
+    fclose(fp);
+    PlannedStmt *new_stmt = (PlannedStmt *)stringToNode(buffer);
+    return new_stmt;
+}
 void
 _PG_init(void)
 {
@@ -326,88 +396,49 @@ _PG_init(void)
                              NULL,
                              NULL);
 
-//	aqo_shmem_init();
-//	aqo_preprocessing_init();
-//	aqo_postprocessing_init();
-//	aqo_cardinality_hooks_init();
-//	aqo_path_utils_init();
-//
-//	init_deactivated_queries_storage();
-//
-//	/*
-//	 * Create own Top memory Context for reporting AQO memory in the future.
-//	 */
-//	AQOTopMemCtx = AllocSetContextCreate(TopMemoryContext,
-//											 "AQOTopMemoryContext",
-//											 ALLOCSET_DEFAULT_SIZES);
-//	/*
-//	 * AQO Cache Memory Context containe environment data.
-//	 */
-//	AQOCacheMemCtx = AllocSetContextCreate(AQOTopMemCtx,
-//											 "AQOCacheMemCtx",
-//											 ALLOCSET_DEFAULT_SIZES);
-//
-//	/*
-//	 * AQOPredictMemoryContext save necessary information for making predict of plan nodes
-//	 * and clean up in the execution stage of query.
-//	 */
-//	AQOPredictMemCtx = AllocSetContextCreate(AQOTopMemCtx,
-//											 "AQOPredictMemoryContext",
-//											 ALLOCSET_DEFAULT_SIZES);
-//	/*
-//	 * AQOLearnMemoryContext save necessary information for writing down to AQO knowledge table
-//	 * and clean up after doing this operation.
-//	 */
-//	AQOLearnMemCtx = AllocSetContextCreate(AQOTopMemCtx,
-//											 "AQOLearnMemoryContext",
-//											 ALLOCSET_DEFAULT_SIZES);
-//	RegisterResourceReleaseCallback(aqo_free_callback, NULL);
-//	RegisterAQOPlanNodeMethods();
-//
-//	MarkGUCPrefixReserved("aqo");
+	aqo_shmem_init();
+	aqo_preprocessing_init();
+	aqo_postprocessing_init();
+	aqo_cardinality_hooks_init();
+	aqo_path_utils_init();
+
+	init_deactivated_queries_storage();
+
+	/*
+	 * Create own Top memory Context for reporting AQO memory in the future.
+	 */
+	AQOTopMemCtx = AllocSetContextCreate(TopMemoryContext,
+											 "AQOTopMemoryContext",
+											 ALLOCSET_DEFAULT_SIZES);
+	/*
+	 * AQO Cache Memory Context containe environment data.
+	 */
+	AQOCacheMemCtx = AllocSetContextCreate(AQOTopMemCtx,
+											 "AQOCacheMemCtx",
+											 ALLOCSET_DEFAULT_SIZES);
+
+	/*
+	 * AQOPredictMemoryContext save necessary information for making predict of plan nodes
+	 * and clean up in the execution stage of query.
+	 */
+	AQOPredictMemCtx = AllocSetContextCreate(AQOTopMemCtx,
+											 "AQOPredictMemoryContext",
+											 ALLOCSET_DEFAULT_SIZES);
+	/*
+	 * AQOLearnMemoryContext save necessary information for writing down to AQO knowledge table
+	 * and clean up after doing this operation.
+	 */
+	AQOLearnMemCtx = AllocSetContextCreate(AQOTopMemCtx,
+											 "AQOLearnMemoryContext",
+											 ALLOCSET_DEFAULT_SIZES);
+	RegisterResourceReleaseCallback(aqo_free_callback, NULL);
+	RegisterAQOPlanNodeMethods();
+
+	MarkGUCPrefixReserved("aqo");
 }
 void
 startup_background_process_main(Datum main_arg) {
-//    elog(LOG, "line 370: %d", MyProcPid);
-//    sleep(20);
-//    aqo_shmem_init();
-//    aqo_preprocessing_init();
-//    aqo_postprocessing_init();
-//    aqo_cardinality_hooks_init();
-//    aqo_path_utils_init();
-//    init_deactivated_queries_storage();
-//
-//    /*
-//     * Create own Top memory Context for reporting AQO memory in the future.
-//     */
-//    AQOTopMemCtx = AllocSetContextCreate(TopMemoryContext,
-//                                         "AQOTopMemoryContext",
-//                                         ALLOCSET_DEFAULT_SIZES);
-//    /*
-//     * AQO Cache Memory Context containe environment data.
-//     */
-//    AQOCacheMemCtx = AllocSetContextCreate(AQOTopMemCtx,
-//                                           "AQOCacheMemCtx",
-//                                           ALLOCSET_DEFAULT_SIZES);
-//
-//    /*
-//     * AQOPredictMemoryContext save necessary information for making predict of plan nodes
-//     * and clean up in the execution stage of query.
-//     */
-//    AQOPredictMemCtx = AllocSetContextCreate(AQOTopMemCtx,
-//                                             "AQOPredictMemoryContext",
-//                                             ALLOCSET_DEFAULT_SIZES);
-//    /*
-//     * AQOLearnMemoryContext save necessary information for writing down to AQO knowledge table
-//     * and clean up after doing this operation.
-//     */
-//    AQOLearnMemCtx = AllocSetContextCreate(AQOTopMemCtx,
-//                                           "AQOLearnMemoryContext",
-//                                           ALLOCSET_DEFAULT_SIZES);
-//    RegisterResourceReleaseCallback(aqo_free_callback, NULL);
-//    RegisterAQOPlanNodeMethods();
-//
-//    MarkGUCPrefixReserved("aqo");
+//    elog(LOG,"entering startup_background_process_main");
     BackgroundWorkerInitializeConnection("noisepage_db", "noisepage_user", 0);
     StartTransactionCommand();
     MemoryContext oldcontext;
@@ -418,24 +449,15 @@ startup_background_process_main(Datum main_arg) {
     bool		use_implicit_block;
     char		msec_str[32];
    const char * query_string = MyBgworkerEntry->bgw_extra;
-//    elog(LOG, "executing plan");
-//    bool found;
-//    List * aqo_query_tree = ShmemInitStruct("AQO shared query tree pointer", 10000, &found);
-//    elog(LOG, "414, found: %s, aqo_query_tree null: %s", found? "true":"false", aqo_query_tree == NULL? "true": "false");
-//    elog(LOG, "aqo: length : %d, max_length: %d", aqo_query_tree->length, aqo_query_tree->max_length);
-//    List * plan = pg_plan_queries(aqo_query_tree, query_string,
-//                                  CURSOR_OPT_PARALLEL_OK, NULL);
-//    elog(LOG, "416");
-//    FILE * plan_file = fopen("plan.bin", "wb");
-//
-//    fwrite(plan,  offsetof(List, initial_elements) +
-//                  plan->length * sizeof(ListCell), 1, plan_file);
-//    elog(LOG, "412");
-//    fclose(plan_file);
-
-//    MemoryContextSwitchTo(AQOTopMemCtx);
-    parsetree_list = pg_parse_query(query_string);
-// break aqo.c:436
+    char* new_query_string = malloc(strlen(query_string) + 1);
+    char *select_str = strstr(query_string, "select");  // Find the first occurrence of "select"
+    if (select_str != NULL) {
+        memmove(new_query_string, select_str, strlen(select_str) + 1);  // Copy the remaining substring to the beginning of the string
+    }
+    else{
+        return NULL;
+    }
+    parsetree_list = pg_parse_query(new_query_string);
 
     /*
      * For historical reasons, if multiple SQL statements are given in a
@@ -447,12 +469,13 @@ startup_background_process_main(Datum main_arg) {
      */
     use_implicit_block = (list_length(parsetree_list) > 1);
 
-
+    //todo: 命名加上parse_tree第几个item的区分
     /*
      * Run through the raw parsetree(s) and process each one.
      */
     foreach(parsetree_item, parsetree_list)
     {
+
         RawStmt *parsetree = lfirst_node(RawStmt, parsetree_item);
         bool snapshot_set = false;
         CommandTag commandTag;
@@ -465,19 +488,35 @@ startup_background_process_main(Datum main_arg) {
         int16 format;
 
 
-        querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, query_string,
+        querytree_list = pg_analyze_and_rewrite_fixedparams(parsetree, new_query_string,
                                                             NULL, 0, NULL);
-        plantree_list = pg_plan_queries(querytree_list, query_string,
-                                        CURSOR_OPT_PARALLEL_OK, NULL);
-        FILE * plan_file = fopen("/home/ubuntu/postgres-private/plan.bin", "wb");
-        elog(LOG, "473: %s", nodeToString(linitial(plantree_list)));
-        fwrite(plantree_list,  offsetof(List, initial_elements) +
-                plantree_list->length * sizeof(ListCell), 1, plan_file);
-        elog(LOG, "412");
-        fclose(plan_file);
+        int original_aqo_mode = aqo_mode;
+        aqo_mode = AQO_MODE_LEARN;
 
+        plantree_list = pg_plan_queries(querytree_list, new_query_string,
+                                        CURSOR_OPT_PARALLEL_OK, NULL);
+        if(plantree_list!=NULL) {
+            // read if the query existed
+            PlannedStmt *old_pstmt = read_result_from_file_for_sub(query_string);
+            if(old_pstmt!=NULL) {
+                // exists old plan, check the new plan is better or not
+                PlannedStmt *new_pstmt = linitial_node(PlannedStmt, plantree_list);
+//                elog(LOG,"new pstmt: %s", nodeToString(new_pstmt));
+                if(new_pstmt->planTree!=NULL && old_pstmt->planTree!=NULL && new_pstmt->planTree->total_cost< old_pstmt->planTree->total_cost) {
+                    // new plan is better, write it
+//                    elog(LOG,"old cost : %f, new cost: %f", old_pstmt->planTree->total_cost, new_pstmt->planTree->total_cost);
+                    write_result_to_file_for_sub(query_string, new_pstmt);
+                    // send signal to interrupt the main process
+                    kill(MyBgworkerEntry->bgw_notify_pid, SIGUSR2);
+                }
+//                else{
+//                    elog(LOG, "old plan is better, do not write");
+//                }
+            }
+        }
+
+        aqo_mode = original_aqo_mode;
     }
-    kill(MyBgworkerEntry->bgw_notify_pid, SIGUSR2);
 
 }
 /*

@@ -292,6 +292,9 @@ extern PGDLLIMPORT int tcp_user_timeout;
 extern PGDLLIMPORT bool trace_sort;
 #endif
 
+extern bool aqo_enable;
+extern bool need_stop;
+extern bool admit_interrupt;
 /*
  * Functions exported by guc.c
  */
