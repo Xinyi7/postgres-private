@@ -599,11 +599,11 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 		/* run the plan */
 		ExecutorRun(queryDesc, dir, 0L, true);
 
-		/* run cleanup too */
+        /* We can't run ExecutorEnd 'till we're done printing the stats... */
+        totaltime += elapsed_time(&starttime);
+		
+        /* run cleanup too */
 		ExecutorFinish(queryDesc);
-
-		/* We can't run ExecutorEnd 'till we're done printing the stats... */
-		totaltime += elapsed_time(&starttime);
 	}
 
 	ExplainOpenGroup("Query", NULL, true, es);
